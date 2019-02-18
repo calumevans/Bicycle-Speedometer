@@ -1,4 +1,5 @@
 #include <LiquidCrystal.h>
+#include <EEPROM.h>
 
 
 //pin definitions
@@ -8,12 +9,32 @@ LiquidCrystal lcd(7, 8, 9, 10, 11, 12);
 
 
 //variable definitions
-float tripDistance = 0;
-unsigned long totalDistanceKM;
+int tripHours;
+int tripMinutes;
+
+float circum = 2.086;
+float tripDistanceM = 0;
+float tripDistanceKM = 0;
+float storedDistanceKM;
+float displayDistanceKM;
+
 unsigned long previousTime;
-float currentSpeed = 0;
+
+float currentSpeedKMH = 0;
+float previousSpeedKMH;
+float previousSpeedMS = 0;
+float currentSpeedMS;
+float averageSpeedKMH;
+float averageSpeedMS;
+
+float accelerationMSS;
+
+int distanceAddress = 0;
+int eepromCounter = 0;
+unsigned long rotationCounter = 0;
 
 
+//-----------------------------------------STARTUP SCREEN
 void lcdStartup(){
   lcd.begin(16, 2);
   lcd.setCursor(0, 0);
@@ -24,21 +45,17 @@ void lcdStartup(){
   lcd.clear();
 }
 
+//-----------------------------------------BACKGROUND SCREEN
 void lcdBackground(){
-  lcd.setCursor(4, 0);
-  lcd.print("km");
-  lcd.setCursor(12, 0);
-  lcd.print("km/h");
-  lcd.setCursor(4, 1);
-  lcd.print("km");
+  lcd.setCursor(0,0);
+  lcd.print("    km      km/h");
+  lcd.setCursor(0,1);
+  lcd.print("    km    C  :  ");
   lcd.setCursor(9,1);
   lcd.print((char)223);
-  lcd.setCursor(10,1);
-  lcd.print("C");
-  lcd.setCursor(13, 1);
-  lcd.print(":");
 }
 
+//-----------------------------------------READING TEMPERATURE
 int readTemp(){
   int tempVoltage = analogRead(temp);
   double tempK = log(10000.0 * ((1024.0 / tempVoltage - 1)));
@@ -49,34 +66,26 @@ int readTemp(){
   return temperature;
 }
 
+//-----------------------------------------TRIP TIME
 void tripTime(){
   unsigned long milliseconds = millis();
   unsigned long seconds = milliseconds/1000;
   unsigned long minutes = seconds/60;
   
   //values to be used in the screen
-  int tripHours = minutes/60;
-  int tripMinutes = minutes % 60;
-
-    lcd.setCursor(12, 1);      //hours
-    lcd.print(tripHours);
-
-  if(tripMinutes < 10){
-    lcd.setCursor(15, 1);      //minutes
-    lcd.print(tripMinutes);
-    lcd.setCursor(14, 1);      //minutes
-    lcd.print("0");
-  }else if(tripMinutes >= 10){
-    lcd.setCursor(14, 1);
-    lcd.print(tripMinutes);
-  }
+  tripHours = minutes/60;
+  tripMinutes = minutes % 60;
 }
 
+//-----------------------------------------CHECKING ROTATION
 void checkRotation(){
   int initialMagnet = digitalRead(magnet);
-  
+ 
   if(!initialMagnet){
-    calculations(previousTime, tripDistance);
+    calculations(previousTime);
+    rotationCounter++;
+    Serial.print("Rotations #: ");
+    Serial.print(rotationCounter);
     while(!digitalRead(magnet)){
       if(digitalRead(magnet))
         break;
@@ -85,84 +94,154 @@ void checkRotation(){
   lcdData();        //to put the data from the wheel rotation onto the display
 }
 
+//-----------------------------------------DOING THE MATH
+void calculations(unsigned long prevTime){
+  previousSpeedKMH = currentSpeedKMH;
+  previousSpeedMS = currentSpeedMS;
 
-void calculations(unsigned long prevTime, float distance){
+//-----------------------------------------time
   unsigned long currentTime = millis();
   float deltaTime = (float)(currentTime - prevTime)/1000;
 
-  distance = distance + 2.086;
-  float speed = (2.086 / deltaTime)*3.6;
+//-----------------------------------------distance
+  tripDistanceM = tripDistanceM + circum;
 
-  Serial.print("Distance: ");
-  Serial.print(distance);
-  Serial.print(" m   Cycle Time: ");
+//-----------------------------------------speed
+  currentSpeedMS = circum / deltaTime;
+  currentSpeedKMH = currentSpeedMS*3.6;
+  averageSpeedMS = tripDistanceM/(millis()/1000);
+  averageSpeedKMH = averageSpeedMS*3.6;
+
+//-----------------------------------------acceleration
+  accelerationMSS = (currentSpeedMS - previousSpeedMS)/deltaTime;
+
+//-----------------------------------------serial monitor
+  Serial.print("   Distance: ");
+  Serial.print(tripDistanceM);
+  Serial.print("m   Display D: ");
+  Serial.print(displayDistanceKM);
+  Serial.print(" km   Cycle Time: ");
   Serial.print(deltaTime);
   Serial.print(" s   Speed: ");
-  Serial.print(speed);
+  Serial.print(currentSpeedKMH);
+  Serial.print(" km/h   Accel: ");
+  
+  Serial.print(accelerationMSS);
+  Serial.print(" m/s^2");
+  Serial.print("   Average Speed: ");
+  Serial.print(averageSpeedKMH);
   Serial.println(" km/h");
 
+
   previousTime = currentTime;
-  tripDistance = distance;
-  currentSpeed = speed;
+
+//-----------------------------------------stored distance
+//only want to store new data for the odometer every 1km (EEPROM has limited read/write cycles)
+  displayDistanceKM = displayDistanceKM + (circum/1000);
 }
 
-
+//-----------------------------------------WRITING DATA TO SCREEN
 void lcdData(){
 //-----------------------------------------current speed
-  if(currentSpeed < 10){         
+  if(currentSpeedKMH < 10){         
     lcd.setCursor(11, 0);
-    lcd.print((int)currentSpeed);
+    lcd.print((int)currentSpeedKMH);
     lcd.setCursor(10, 0);
     lcd.print("0");
-  }else if(currentSpeed < 100){
+  }else if(currentSpeedKMH < 100){
     lcd.setCursor(10, 0);
-    lcd.print((int)currentSpeed);
+    lcd.print((int)currentSpeedKMH);
   }
-
   
 //-----------------------------------------trip distance
-  float distanceKM = (tripDistance/1000);
-  //Serial.println(distanceKM);
-  if(distanceKM < 10){
+  tripDistanceKM = (tripDistanceM/1000);
+  //Serial.println(tripDistanceKM);
+  if(tripDistanceKM < 10){
     lcd.setCursor(0, 1);
     lcd.print("0");
     lcd.setCursor(1, 1);
-    lcd.print(distanceKM);
+    lcd.print(tripDistanceKM);
     lcd.setCursor(4, 1);
     lcd.print("km");
-  }else if(distanceKM < 100){
+  }else if(tripDistanceKM < 100){
     lcd.setCursor(0, 1); 
-    lcd.print(distanceKM);
+    lcd.print(tripDistanceKM);
     lcd.setCursor(4, 1);
     lcd.print("km");
   }
-
 
 //-----------------------------------------total distance
-  totalDistanceKM = (unsigned long)(totalDistanceKM + distanceKM);
-  if(totalDistanceKM < 10){
+  int wholeNumberDistanceKM = (int)displayDistanceKM;
+  if(displayDistanceKM < 10){
     lcd.setCursor(3, 0);
-    lcd.print(totalDistanceKM);
-  }else if(totalDistanceKM < 100){
+    lcd.print(wholeNumberDistanceKM);
+  }else if(displayDistanceKM < 100){
     lcd.setCursor(2, 0);
-    lcd.print(totalDistanceKM);
-  }else if(totalDistanceKM < 1000){
+    lcd.print(wholeNumberDistanceKM);
+  }else if(displayDistanceKM < 1000){
     lcd.setCursor(1, 0);
-    lcd.print(totalDistanceKM);
-  }else if(totalDistanceKM < 10000){
+    lcd.print(wholeNumberDistanceKM);
+  }else if(displayDistanceKM < 10000){
     lcd.setCursor(2, 0);
-    lcd.print(totalDistanceKM);
+    lcd.print(wholeNumberDistanceKM);
   }
-
   
 //-----------------------------------------temperature
+  int temperature = readTemp();
+  if(temperature <10){
+    lcd.setCursor(8, 1);
+    lcd.print(temperature);
+  }else if(temperature < 100){
     lcd.setCursor(7, 1);
-    lcd.print(readTemp());  
-  
+    lcd.print(temperature);
+  }
+
+//-----------------------------------------trip time
+  if(tripHours < 10){         //hours
+    lcd.setCursor(12, 1);
+    lcd.print(tripHours);
+  }
+
+  if(tripMinutes < 10){       //minutes
+    lcd.setCursor(15, 1);
+    lcd.print(tripMinutes);
+    lcd.setCursor(14, 1);
+    lcd.print("0");
+  }else if(tripMinutes >= 10){
+    lcd.setCursor(14, 1);
+    lcd.print(tripMinutes);
+  }
 }
 
+//-----------------------------------------WRITING TOTAL DISTANCE TO MEMORY
+void writeMemory(){      //after ~1km it will store the total distance value to memory        
+  if(rotationCounter == 480){     
+     EEPROM.put(distanceAddress,displayDistanceKM);   //storing the total distance
+     eepromCounter++;
+     Serial.print("Data Written: ");
+     Serial.println(eepromCounter);
+     rotationCounter = 0;        //resetting the rotation counter
+  }
+}
+
+
+//-----------------------------------------BRAKE LIGHT
+void brakeLight(){    //this will probably be done with an Adafruit Neopixel Ring
+  if(accelerationMSS <= 0){       //basically if the bike is slowing down, it will change tail light's look
+    //put taillight into stopping sequence
+  }else{
+    //put taillight into regular blinking sequence
+  }
+}
+
+
+
+//-----------------------------------------SETUP
 void setup(){
   Serial.begin(9600);
+  
+  EEPROM.get(distanceAddress,storedDistanceKM);
+  displayDistanceKM = storedDistanceKM;
   lcdStartup();
   lcdBackground();
   lcdData();
@@ -171,8 +250,10 @@ void setup(){
 
 }
 
+//-----------------------------------------LOOP
 void loop(){
   tripTime();
   checkRotation();
+  brakeLight();
+  writeMemory();
 }
-
