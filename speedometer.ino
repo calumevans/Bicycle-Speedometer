@@ -187,13 +187,24 @@ void lcdData(){
   }
   
 //-----------------------------------------temperature
+
   int temperature = readTemp();
-  if(temperature <10){
-    lcd.setCursor(8, 1);
-    lcd.print(temperature);
-  }else if(temperature < 100){
-    lcd.setCursor(7, 1);
-    lcd.print(temperature);
+  if(temperature >= 0){
+    if(temperature <10){
+      lcd.setCursor(8, 1);
+      lcd.print(temperature);
+    }else if(temperature < 100){
+      lcd.setCursor(7, 1);
+      lcd.print(temperature);
+    }
+  }else if(temperature < 0){
+    if(temperature > -10){
+      lcd.setCursor(7, 1);
+      lcd.print(temperature);
+    }else if(temperature > -100){
+      lcd.setCursor(6, 1);
+      lcd.print(temperature);
+    }
   }
 
 //-----------------------------------------trip time
@@ -241,6 +252,8 @@ void setup(){
   Serial.begin(9600);
   
   EEPROM.get(distanceAddress,storedDistanceKM);
+  if(isnan(storedDistanceKM))
+    storedDistanceKM = 0;
   displayDistanceKM = storedDistanceKM;
   lcdStartup();
   lcdBackground();
