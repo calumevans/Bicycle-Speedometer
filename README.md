@@ -1,6 +1,6 @@
 # bicycle-speedometer
 
-This usues a hall switch attached to the bicycle fork and a magnet
+This uses a hall sensor (detecting a magnet) attached to the bicycle fork and a magnet
 attached to the front wheel to detect wheel rotations. This data is 
 used to calculate distance, speed, and acceleration.
 
