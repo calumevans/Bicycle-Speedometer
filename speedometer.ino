@@ -3,9 +3,9 @@
 
 
 //pin definitions
-#define temp 0    //analog pin
-#define magnet 6
-LiquidCrystal lcd(7, 8, 9, 10, 11, 12);
+#define temp 1    //analog pin
+#define magnet 11
+LiquidCrystal lcd(6, 7, 5, 4, 3, 2);
 
 
 //variable definitions
@@ -270,3 +270,4 @@ void loop(){
   brakeLight();
   writeMemory();
 }
+
