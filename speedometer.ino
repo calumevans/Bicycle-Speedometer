@@ -58,7 +58,7 @@ void lcdBackground(){
 //-----------------------------------------READING TEMPERATURE
 int readTemp(){
   int tempVoltage = analogRead(temp);
-  double tempK = log(10000.0 * ((1024.0 / tempVoltage - 1)));
+  double tempK = log(10000.0 * ((1024.0 / tempVoltage - 1)));     //this is a really standard formula for thermoresistors
   tempK = 1 / (0.001129148 + (0.000234125 + (0.0000000876741 * tempK * tempK )) * tempK );
   float tempC = tempK - 273.15;       //converting Kelvin to Celcius
   int temperature = (int)tempC;       //this just truncates the temperature but it doesn't need to be precise
@@ -91,7 +91,6 @@ void checkRotation(){
         break;
     }
   }
-  lcdData();        //to put the data from the wheel rotation onto the display
 }
 
 //-----------------------------------------DOING THE MATH
@@ -267,7 +266,7 @@ void setup(){
 void loop(){
   tripTime();
   checkRotation();
+  lcdData();
   brakeLight();
   writeMemory();
 }
-
