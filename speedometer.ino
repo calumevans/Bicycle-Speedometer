@@ -5,6 +5,9 @@
 //pin definitions
 #define temp 1    //analog pin
 #define magnet 11
+#define blue 8        //colours are for the status RGB LED
+#define green 9
+#define red 10
 LiquidCrystal lcd(6, 7, 5, 4, 3, 2);
 
 
@@ -41,7 +44,7 @@ void lcdStartup(){
   lcd.print("SPEEDOMETER 2000");
   lcd.setCursor(1, 1);
   lcd.print("BY CALUM EVANS");
-  delay(2000);
+  statusLED(1); //cycles through LED colours 3 times
   lcd.clear();
 }
 
@@ -224,12 +227,13 @@ void lcdData(){
 }
 
 //-----------------------------------------WRITING TOTAL DISTANCE TO MEMORY
-void writeMemory(){      //after ~1km it will store the total distance value to memory        
-  if(rotationCounter == 480){     
+void writeMemory(){      //after ~200m it will store the total distance value to memory        
+  if(rotationCounter == 96){     
      EEPROM.put(distanceAddress,displayDistanceKM);   //storing the total distance
      eepromCounter++;
      Serial.print("Data Written: ");
      Serial.println(eepromCounter);
+     statusLED(2);    //showing that it wrote to memory
      rotationCounter = 0;        //resetting the rotation counter
   }
 }
@@ -244,11 +248,47 @@ void brakeLight(){    //this will probably be done with an Adafruit Neopixel Rin
   }
 }
 
+//-----------------------------------------STATUS LED
+void statusLED(int seq){
+  switch(seq){
+    case 1:         //startup sequence    --cycle through the 3 colours
+      for(int i=0; i<10; i++){
+        digitalWrite(blue, HIGH);
+        delay(65);
+        digitalWrite(blue, LOW);
+        digitalWrite(green, HIGH);
+        delay(65);
+        digitalWrite(green, LOW);
+        digitalWrite(red, HIGH);
+        delay(65);
+        digitalWrite(red, LOW);
+      }
+      break;
+    case 2:         //data written        --flash blue breifly
+      digitalWrite(blue, HIGH);
+      delay(40);
+      digitalWrite(blue, LOW);
+      break;
+    case 3:         //reached max speed of trip     --double flash green
+      digitalWrite(green, HIGH);
+      delay(40);
+      digitalWrite(green, LOW);
+      delay(30);
+      digitalWrite(green, HIGH);
+      delay(40);
+      digitalWrite(bgreenlue, LOW);
+      break;
+  }
+}
 
 
 //-----------------------------------------SETUP
 void setup(){
   Serial.begin(9600);
+
+  pinMode(blue,OUTPUT);
+  pinMode(green,OUTPUT);
+  pinMode(red,OUTPUT);
   
   EEPROM.get(distanceAddress,storedDistanceKM);
   if(isnan(storedDistanceKM))
